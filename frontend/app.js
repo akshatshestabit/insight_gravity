@@ -327,7 +327,6 @@ function renderJobsHistory() {
   });
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 function formatBytes(b) {
   if (b < 1024) return `${b} B`;
   if (b < 1024 ** 2) return `${(b / 1024).toFixed(1)} KB`;
@@ -336,4 +335,86 @@ function formatBytes(b) {
 
 function escHtml(s) {
   return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+// ── Retrieve ──────────────────────────────────────────────────────────────────
+const retrieveBtn   = $("retrieve-btn");
+const retrieveInput = $("retrieve-input");
+const retrieveMeta  = $("retrieve-meta");
+const retrieveResults = $("retrieve-results");
+
+const MODALITY_ICON = {
+  text: "📝", table: "📊", image: "🖼", graph: "🕸", auto: "🔀"
+};
+const MODALITY_COLOR = {
+  text: "#6366f1", table: "#10b981", image: "#f59e0b", graph: "#ec4899"
+};
+
+retrieveBtn.addEventListener("click", runRetrieve);
+retrieveInput.addEventListener("keydown", (e) => { if (e.key === "Enter") runRetrieve(); });
+
+async function runRetrieve() {
+  const query = retrieveInput.value.trim();
+  if (!query) return;
+
+  const modality = $("retrieve-modality").value;
+  retrieveBtn.disabled = true;
+  retrieveBtn.innerHTML = `<span class="btn-icon">⏳</span> Searching…`;
+  retrieveResults.innerHTML = `<div class="retrieve-loading">Routing query and searching across modalities…</div>`;
+  retrieveMeta.classList.add("hidden");
+
+  try {
+    const res = await fetch(`${API}/retrieve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query, modality, top_k: 5 }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    renderRetrieveResults(data);
+  } catch (err) {
+    retrieveResults.innerHTML = `<div class="retrieve-error">⚠️ ${escHtml(err.message)}</div>`;
+  } finally {
+    retrieveBtn.disabled = false;
+    retrieveBtn.innerHTML = `<span class="btn-icon">🔍</span> Search`;
+  }
+}
+
+function renderRetrieveResults(data) {
+  retrieveMeta.classList.remove("hidden");
+  retrieveMeta.innerHTML = `
+    <span>Query: <strong>${escHtml(data.query)}</strong></span>
+    <span>Modality: <strong>${data.modality_used}</strong></span>
+    <span>Results: <strong>${data.total}</strong></span>`;
+
+  if (!data.results || data.results.length === 0) {
+    retrieveResults.innerHTML = `<p class="empty-state">No results found. Try ingesting documents first.</p>`;
+    return;
+  }
+
+  retrieveResults.innerHTML = "";
+  data.results.forEach((hit, i) => {
+    const icon   = MODALITY_ICON[hit.modality] || "📄";
+    const color  = MODALITY_COLOR[hit.modality] || "#6366f1";
+    const pct    = Math.round(hit.score * 1000) / 10;
+    const prov   = hit.provenance;
+    const bbox   = prov.bbox ? ` · bbox: [${prov.bbox.map(v => v.toFixed(0)).join(", ")}]` : "";
+
+    const card = document.createElement("div");
+    card.className = "retrieve-hit-card";
+    card.innerHTML = `
+      <div class="hit-header">
+        <span class="modality-badge" style="background:${color}20;color:${color};border-color:${color}40">
+          ${icon} ${hit.modality.toUpperCase()}
+        </span>
+        <span class="hit-score">score ${pct}%</span>
+        <span class="hit-rank">#${i + 1}</span>
+      </div>
+      <div class="hit-content">${escHtml(hit.content)}</div>
+      <div class="hit-provenance">
+        📎 <strong>${escHtml(prov.filename || "unknown")}</strong>
+        · page <strong>${prov.page}</strong>${bbox}
+      </div>`;
+    retrieveResults.appendChild(card);
+  });
 }

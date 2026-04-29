@@ -22,6 +22,7 @@
     <nav class="tabs" role="tablist">
       <button class="tab active" data-tab="ingest" role="tab" id="tab-ingest">📄 Ingest</button>
       <button class="tab" data-tab="chat" role="tab" id="tab-chat">🤖 Chat</button>
+      <button class="tab" data-tab="retrieve" role="tab" id="tab-retrieve">🔍 Retrieve</button>
       <button class="tab" data-tab="jobs" role="tab" id="tab-jobs">📊 Jobs</button>
     </nav>
     <div class="status-dot" id="api-status" title="API status">
@@ -111,6 +112,33 @@
     <div class="jobs-list" id="jobs-list">
       <p class="empty-state">No jobs yet. Start an ingestion to see progress here.</p>
     </div>
+  </section>
+  <!-- ─ Retrieve Panel ─ -->
+  <section class="panel hidden" id="panel-retrieve">
+    <div class="panel-header">
+      <h1 class="panel-title">Semantic Retrieval</h1>
+      <p class="panel-sub">Search indexed documents across text, tables, and images. Results include page-level provenance citations.</p>
+    </div>
+
+    <div class="card retrieve-card">
+      <div class="retrieve-controls">
+        <input class="chat-input" id="retrieve-input" type="text" placeholder="Ask a question or search for a topic…" />
+        <select class="select" id="retrieve-modality">
+          <option value="auto">🔀 Auto (route)</option>
+          <option value="text">📝 Text</option>
+          <option value="table">📊 Table</option>
+          <option value="image">🖼 Image</option>
+          <option value="graph">🕸 Graph</option>
+          <option value="all">🌐 All</option>
+        </select>
+        <button class="btn btn-primary" id="retrieve-btn">
+          <span class="btn-icon">🔍</span> Search
+        </button>
+      </div>
+      <div class="retrieve-meta hidden" id="retrieve-meta"></div>
+    </div>
+
+    <div class="retrieve-results" id="retrieve-results"></div>
   </section>
 
 </main>

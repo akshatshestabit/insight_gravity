@@ -438,3 +438,98 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+/* ── Retrieve Panel ──────────────────────────────────────────────────────── */
+.retrieve-card { padding: 20px; }
+.retrieve-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.retrieve-controls .chat-input { flex: 1; }
+.retrieve-controls .select { width: 160px; }
+
+.retrieve-meta {
+  display: flex;
+  gap: 16px;
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--muted);
+  flex-wrap: wrap;
+}
+.retrieve-meta strong { color: var(--text); }
+
+.retrieve-results { margin-top: 20px; display: flex; flex-direction: column; gap: 12px; }
+
+.retrieve-hit-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 20px;
+  transition: border-color .2s, transform .15s;
+}
+.retrieve-hit-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.hit-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.modality-badge {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid;
+  letter-spacing: 0.03em;
+}
+.hit-score {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--muted);
+  font-family: var(--mono, monospace);
+}
+.hit-rank {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+}
+.hit-content {
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--text);
+  white-space: pre-wrap;
+  max-height: 160px;
+  overflow: hidden;
+  position: relative;
+}
+.hit-provenance {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--muted);
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.hit-provenance strong { color: var(--text); }
+
+.retrieve-loading {
+  text-align: center;
+  color: var(--muted);
+  padding: 40px;
+  font-size: 14px;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+.retrieve-error {
+  text-align: center;
+  color: var(--red, #f87171);
+  padding: 20px;
+  font-size: 14px;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}

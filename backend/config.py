@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     # Uploads
     UPLOAD_DIR: str = "/tmp/insightforge_uploads"
 
+    # Day 2 — Vector store
+    QDRANT_URL: str = "http://localhost:6333"
+    EMBEDDING_MODEL: str = "models/text-embedding-004"
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 

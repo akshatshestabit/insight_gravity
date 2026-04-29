@@ -17,9 +17,10 @@ from langgraph.prebuilt import create_react_agent
 from agents.tools.calculator import calculator
 from agents.tools.file_reader import file_reader
 from agents.tools.web_search import web_search
+from agents.tools.retrieve import retrieve_docs
 from backend.config import settings
 
-TOOLS = [calculator, web_search, file_reader]
+TOOLS = [calculator, web_search, file_reader, retrieve_docs]
 
 
 def _build_agent():

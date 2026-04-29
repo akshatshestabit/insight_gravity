@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from backend.database import init_db
-from backend.routers import chat, ingest
+from backend.routers import chat, ingest, retrieve
 
 
 @asynccontextmanager
@@ -33,6 +33,7 @@ app.add_middleware(
 # Routers
 app.include_router(chat.router)
 app.include_router(ingest.router)
+app.include_router(retrieve.router)
 
 # Mount the frontend UI (must be absolute or relative to the working dir)
 app.mount("/ui", StaticFiles(directory="frontend", html=True), name="frontend")

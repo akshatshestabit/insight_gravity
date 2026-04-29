@@ -75,3 +75,40 @@ class JobStatus(BaseModel):
     failed_documents: int
     results: List[Dict[str, Any]] = Field(default_factory=list)
     error: Optional[str] = None
+
+
+# ─── Day 2: Retrieval Schemas ─────────────────────────────────────────────────
+
+class RetrieveRequest(BaseModel):
+    query: str
+    job_id: Optional[str] = None
+    top_k: int = 5
+    modality: str = "auto"   # auto | text | table | image | graph | all
+
+
+class Provenance(BaseModel):
+    filename: str
+    page: int
+    bbox: Optional[List[float]] = None
+    job_id: str = ""
+
+
+class RetrievalHit(BaseModel):
+    content: str
+    score: float
+    modality: str
+    provenance: Provenance
+
+
+class RetrieveResponse(BaseModel):
+    query: str
+    modality_used: str = "auto"
+    total: int
+    results: List[RetrievalHit]
+
+
+class GraphSummary(BaseModel):
+    job_id: str
+    nodes: int
+    edges: int
+    entities: List[str]
