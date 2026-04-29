@@ -1,3 +1,4 @@
+
 # InsightForge — Day 1
 
 > **Multimodal RAG + Agentic AI Platform** | LangGraph ReAct Agent · Gemini · PostgreSQL · Celery
