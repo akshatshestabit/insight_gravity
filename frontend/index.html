@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>InsightForge — Dashboard</title>
+  <meta name="description" content="InsightForge Day 1: Ingest documents and chat with a LangGraph ReAct agent powered by Gemini." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header class="header">
+  <div class="header-inner">
+    <div class="logo">
+      <span class="logo-icon">⚡</span>
+      <span class="logo-text">InsightForge</span>
+      <span class="logo-badge">Day 1</span>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-tab="ingest" role="tab" id="tab-ingest">📄 Ingest</button>
+      <button class="tab" data-tab="chat" role="tab" id="tab-chat">🤖 Chat</button>
+      <button class="tab" data-tab="jobs" role="tab" id="tab-jobs">📊 Jobs</button>
+    </nav>
+    <div class="status-dot" id="api-status" title="API status">
+      <span class="dot"></span><span class="status-label">Connecting…</span>
+    </div>
+  </div>
+</header>
+
+<!-- ── Main ── -->
+<main class="main">
+
+  <!-- ─ Ingest Panel ─ -->
+  <section class="panel" id="panel-ingest">
+    <div class="panel-header">
+      <h1 class="panel-title">Document Ingestion</h1>
+      <p class="panel-sub">Upload PDFs, text, or markdown files. The pipeline will extract text chunks, tables, and images.</p>
+    </div>
+
+    <div class="card upload-card" id="drop-zone">
+      <div class="upload-icon">📂</div>
+      <p class="upload-hint">Drag & drop files here or <label class="browse-link" for="file-input">browse</label></p>
+      <p class="upload-types">PDF, TXT, MD, CSV — up to 50 MB each</p>
+      <input type="file" id="file-input" multiple accept=".pdf,.txt,.md,.csv" hidden />
+    </div>
+
+    <div class="file-list" id="file-list"></div>
+
+    <div class="form-row">
+      <label class="form-label">Mode</label>
+      <select class="select" id="ingest-mode">
+        <option value="batch">Batch (queue all)</option>
+      </select>
+      <button class="btn btn-primary" id="ingest-btn" disabled>
+        <span class="btn-icon">🚀</span> Start Ingestion
+      </button>
+    </div>
+
+    <!-- Active job card -->
+    <div class="card job-card hidden" id="active-job">
+      <div class="job-header">
+        <div>
+          <div class="job-title">Processing job…</div>
+          <code class="job-id" id="current-job-id"></code>
+        </div>
+        <span class="badge" id="job-badge">queued</span>
+      </div>
+      <div class="progress-bar-wrap">
+        <div class="progress-bar" id="progress-bar"></div>
+      </div>
+      <div class="progress-stats">
+        <span id="progress-text">0%</span>
+        <span id="docs-text">0 / 0 documents</span>
+      </div>
+      <div class="artifact-grid" id="artifact-grid"></div>
+    </div>
+  </section>
+
+  <!-- ─ Chat Panel ─ -->
+  <section class="panel hidden" id="panel-chat">
+    <div class="panel-header">
+      <h1 class="panel-title">Agent Chat</h1>
+      <p class="panel-sub">Talk to the LangGraph ReAct agent powered by Gemini. Full reasoning traces included.</p>
+    </div>
+
+    <div class="chat-window" id="chat-window">
+      <div class="chat-welcome">
+        <div class="welcome-icon">🤖</div>
+        <p>Hi! I'm a ReAct agent with tools for <strong>web search</strong>, <strong>math</strong>, and <strong>file reading</strong>.</p>
+        <p class="welcome-hint">Try: "What is 1234 × 5678?" or "Search for latest AI news"</p>
+      </div>
+    </div>
+
+    <form class="chat-form" id="chat-form" autocomplete="off">
+      <input class="chat-input" id="chat-input" type="text" placeholder="Ask anything…" />
+      <button class="btn btn-primary" type="submit" id="chat-send">
+        <span>Send</span> <span class="btn-icon">→</span>
+      </button>
+    </form>
+  </section>
+
+  <!-- ─ Jobs Panel ─ -->
+  <section class="panel hidden" id="panel-jobs">
+    <div class="panel-header">
+      <h1 class="panel-title">Job History</h1>
+      <p class="panel-sub">All ingestion jobs tracked this session.</p>
+    </div>
+    <div class="jobs-list" id="jobs-list">
+      <p class="empty-state">No jobs yet. Start an ingestion to see progress here.</p>
+    </div>
+  </section>
+
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
