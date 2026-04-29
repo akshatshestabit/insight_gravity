@@ -1,24 +1,27 @@
-import os
+import logging
 from langchain_core.tools import tool
+from google import genai
+from google.genai import types
+from backend.config import settings
 
+logger = logging.getLogger(__name__)
 
 @tool
 def web_search(query: str) -> str:
     """
-    Search the web for up-to-date information on any topic.
-    Returns a summary of the top results.
-    Requires TAVILY_API_KEY environment variable.
+    Search the web for up-to-date information on any topic using Google Search via Gemini.
+    Returns a summary of the top results and answers to the query.
     """
     try:
-        from tavily import TavilyClient
-        client = TavilyClient(api_key=os.getenv("TAVILY_API_KEY", ""))
-        response = client.search(query=query, max_results=3, search_depth="basic")
-        results = response.get("results", [])
-        if not results:
-            return "No results found."
-        parts = []
-        for r in results:
-            parts.append(f"**{r.get('title', 'No title')}**\n{r.get('content', '')}\nSource: {r.get('url', '')}")
-        return "\n\n---\n\n".join(parts)
+        client = genai.Client(api_key=settings.GEMINI_API_KEY)
+        response = client.models.generate_content(
+            model=settings.GEMINI_MODEL,
+            contents=query,
+            config=types.GenerateContentConfig(
+                tools=[{"google_search": {}}],
+            )
+        )
+        return response.text
     except Exception as e:
+        logger.error(f"Web search failed: {e}")
         return f"Web search failed: {e}"

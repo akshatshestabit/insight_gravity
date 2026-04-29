@@ -4,10 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     # LLM
     GEMINI_API_KEY: str = ""
-    GEMINI_MODEL: str = "gemini-3-flash-preview"
-
-    # Web search
-    TAVILY_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-2.5-flash"
 
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://insightforge:insightforge@localhost:5432/insightforge"
@@ -26,7 +23,7 @@ class Settings(BaseSettings):
 
     # Day 2 — Vector store
     QDRANT_URL: str = "http://localhost:6333"
-    EMBEDDING_MODEL: str = "models/text-embedding-004"
+    EMBEDDING_MODEL: str = "gemini-embedding-001"   # 768-dim, task_type support
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

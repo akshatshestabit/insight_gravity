@@ -42,3 +42,4 @@ aiofiles==24.1.0
 qdrant-client==1.9.1
 rank-bm25==0.2.2
 networkx==3.3
+google-genai>=1.7.0

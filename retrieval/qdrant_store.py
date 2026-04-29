@@ -18,7 +18,7 @@ from backend.config import settings
 
 logger = logging.getLogger(__name__)
 
-VECTOR_SIZE = 768  # text-embedding-004
+VECTOR_SIZE = 3072  # gemini-embedding-001 output dimension
 COLLECTIONS = ["text_chunks", "table_chunks", "image_chunks"]
 
 _client: Optional[QdrantClient] = None
