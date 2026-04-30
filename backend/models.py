@@ -2,7 +2,7 @@ import uuid
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
-from sqlalchemy import Column, Float, Integer, JSON, String, Text
+from sqlalchemy import Boolean, Column, Float, Integer, JSON, String, Text
 from sqlalchemy import DateTime
 from sqlalchemy.sql import func
 
@@ -112,3 +112,38 @@ class GraphSummary(BaseModel):
     nodes: int
     edges: int
     entities: List[str]
+
+
+# ─── Day 3: Multi-Agent & MCP Models ─────────────────────────────────────────
+
+class ResearchSession(Base):
+    """Persists multi-agent research session metadata and outputs."""
+    __tablename__ = "research_sessions"
+
+    id             = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    query          = Column(Text, nullable=False)
+    plan           = Column(JSON, nullable=True)
+    final_report   = Column(JSON, nullable=True)
+    critique       = Column(JSON, nullable=True)
+    cost_usd       = Column(Float, default=0.0)
+    duration_ms    = Column(Integer, default=0)
+    awaiting_approval = Column(Boolean, default=False)
+    error          = Column(Text, nullable=True)
+    created_at     = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at     = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+class AuditLog(Base):
+    """Signed audit trail for every MCP tool invocation."""
+    __tablename__ = "audit_log"
+
+    id             = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    timestamp      = Column(String, nullable=False)
+    session_id     = Column(String, nullable=True)
+    server_name    = Column(String, nullable=True)
+    tool_name      = Column(String, nullable=False)
+    arguments      = Column(Text, nullable=True)       # JSON-serialised
+    result_summary = Column(Text, nullable=True)
+    success        = Column(Boolean, default=True)
+    error          = Column(Text, nullable=True)
+    signature      = Column(String(64), nullable=False) # HMAC-SHA256 hex
