@@ -1,6 +1,7 @@
 """
 Session management endpoints for long-running research investigations.
 
+GET  /sessions               — List recent research sessions
 GET  /session/{id}           — Retrieve session metadata and current status
 POST /session/{id}/resume    — Resume a paused (HITL) session
 GET  /session/{id}/messages  — Full agent message trace for a session
@@ -37,8 +38,8 @@ class SessionStatus(BaseModel):
 
 
 class ResumeRequest(BaseModel):
-    approved: bool = True        # set False to abort the paused session
-    feedback: Optional[str] = None  # optional human feedback injected before resuming
+    approved: bool = True
+    feedback: Optional[str] = None
 
 
 class ResumeResponse(BaseModel):
@@ -51,6 +52,36 @@ class ResumeResponse(BaseModel):
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
+@router.get("s", response_model=list[SessionStatus], summary="List recent research sessions")
+async def list_sessions(limit: int = 20):
+    """Return the most recent research sessions, newest first."""
+    try:
+        async for db in get_db():
+            rows = await db.execute(
+                text(
+                    "SELECT id, query, cost_usd, duration_ms, error, created_at "
+                    "FROM research_sessions ORDER BY created_at DESC LIMIT :lim"
+                ),
+                {"lim": limit},
+            )
+            records = rows.mappings().all()
+
+        return [
+            SessionStatus(
+                session_id=r["id"],
+                query=r["query"] or "",
+                status="error" if r.get("error") else "completed",
+                cost_usd=float(r.get("cost_usd") or 0.0),
+                duration_ms=int(r.get("duration_ms") or 0),
+                error=r.get("error"),
+                created_at=str(r.get("created_at") or ""),
+            )
+            for r in records
+        ]
+    except Exception as exc:
+        logger.error("list_sessions failed: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
 
 @router.get("/{session_id}", response_model=SessionStatus, summary="Get session status")
 async def get_session(session_id: str):

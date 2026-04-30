@@ -9,15 +9,19 @@ Endpoints:
 import asyncio
 import json
 import os
+import shutil
 import uuid
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import redis as _redis
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+from sqlalchemy import text
 
 from backend.config import settings
+from backend.database import get_db
 from backend.models import IngestResponse, JobStatus
 from ingestion.tasks import ingest_document
 
@@ -29,6 +33,18 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 def _get_redis() -> _redis.Redis:
     return _redis.from_url(settings.REDIS_URL)
+
+
+# ── Pydantic schemas for list / delete ───────────────────────────────────────
+
+class DocumentInfo(BaseModel):
+    job_id: str
+    filename: str
+    status: str
+    text_chunks: int
+    table_chunks: int
+    image_chunks: int
+    created_at: Optional[str] = None
 
 
 # ── POST /ingest ──────────────────────────────────────────────────────────────
@@ -130,3 +146,122 @@ async def stream_status(job_id: str):
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+# ── GET /ingest/jobs ──────────────────────────────────────────────────────────
+
+@router.get("/jobs", response_model=List[DocumentInfo], summary="List all ingested documents")
+async def list_jobs():
+    """
+    Returns every ingested document with chunk counts.
+    Source of truth is Qdrant (permanent) — Redis keys expire after 1 h.
+    Groups by (job_id, filename) across all 3 collections.
+    """
+    from retrieval.qdrant_store import get_client, COLLECTIONS, ensure_collections
+    import asyncio
+
+    try:
+        ensure_collections()
+        client = get_client()
+
+        # { (job_id, filename): {text, table, image} }
+        aggregated: dict = {}
+
+        col_key = {"text_chunks": "text_chunks", "table_chunks": "table_chunks", "image_chunks": "image_chunks"}
+
+        for col in COLLECTIONS:
+            offset = None
+            while True:
+                result, next_offset = client.scroll(
+                    collection_name=col,
+                    limit=250,
+                    offset=offset,
+                    with_payload=True,
+                    with_vectors=False,
+                )
+                for point in result:
+                    p = point.payload or {}
+                    jid      = p.get("job_id", "unknown")
+                    filename = p.get("filename", "unknown")
+                    key      = (jid, filename)
+                    if key not in aggregated:
+                        aggregated[key] = {"text_chunks": 0, "table_chunks": 0, "image_chunks": 0}
+                    aggregated[key][col_key[col]] += 1
+
+                if next_offset is None:
+                    break
+                offset = next_offset
+
+        docs = [
+            DocumentInfo(
+                job_id=job_id,
+                filename=filename,
+                status="done",
+                text_chunks=counts["text_chunks"],
+                table_chunks=counts["table_chunks"],
+                image_chunks=counts["image_chunks"],
+            )
+            for (job_id, filename), counts in aggregated.items()
+        ]
+        # Sort newest first by job_id (UUID v4 is random, so sort by filename as fallback)
+        docs.sort(key=lambda d: d.filename)
+        return docs
+
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+# ── DELETE /ingest/{job_id} ───────────────────────────────────────────────────
+
+@router.delete("/{job_id}", summary="Delete an ingested document and all its vectors")
+async def delete_job(job_id: str):
+    """
+    Permanently removes a document from:
+      - PostgreSQL (ingest_jobs + document_chunks)
+      - Qdrant (all 3 vector collections)
+      - Redis (job state cache)
+      - Disk (uploaded files)
+    """
+    from retrieval.qdrant_store import delete_by_job_id
+
+    errors = []
+
+    # 1. Qdrant
+    try:
+        delete_by_job_id(job_id)
+    except Exception as exc:
+        errors.append(f"Qdrant: {exc}")
+
+    # 2. PostgreSQL
+    try:
+        async for db in get_db():
+            await db.execute(
+                text("DELETE FROM document_chunks WHERE job_id = :jid"),
+                {"jid": job_id},
+            )
+            await db.execute(
+                text("DELETE FROM ingest_jobs WHERE id = :jid"),
+                {"jid": job_id},
+            )
+            await db.commit()
+    except Exception as exc:
+        errors.append(f"DB: {exc}")
+
+    # 3. Redis
+    try:
+        r = _get_redis()
+        r.delete(f"job:{job_id}")
+    except Exception as exc:
+        errors.append(f"Redis: {exc}")
+
+    # 4. Disk (uploaded files)
+    try:
+        job_dir = UPLOAD_DIR / job_id
+        if job_dir.exists():
+            shutil.rmtree(job_dir)
+    except Exception as exc:
+        errors.append(f"Disk: {exc}")
+
+    if errors:
+        return {"job_id": job_id, "status": "partial_delete", "errors": errors}
+    return {"job_id": job_id, "status": "deleted"}

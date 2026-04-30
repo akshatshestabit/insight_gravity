@@ -61,6 +61,26 @@ def upsert_chunks(
     return len(points)
 
 
+def delete_by_job_id(job_id: str) -> int:
+    """Delete all vectors for a given job_id from every collection. Returns total deleted."""
+    from qdrant_client.models import FilterSelector
+    client = get_client()
+    total = 0
+    flt = Filter(must=[FieldCondition(key="job_id", match=MatchValue(value=job_id))])
+    for col in COLLECTIONS:
+        try:
+            result = client.delete(
+                collection_name=col,
+                points_selector=FilterSelector(filter=flt),
+            )
+            # result.operation_id signals success; count removed is not returned directly
+            total += 1
+            logger.info("Deleted job_id=%s from %s", job_id, col)
+        except Exception as exc:
+            logger.warning("Qdrant delete failed on %s: %s", col, exc)
+    return total
+
+
 def search(
     collection: str,
     query_vector: List[float],

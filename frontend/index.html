@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>InsightForge — Dashboard</title>
-  <meta name="description" content="InsightForge Day 1: Ingest documents and chat with a LangGraph ReAct agent powered by Gemini." />
+  <meta name="description" content="InsightForge: Multimodal RAG + Multi-Agent Orchestration powered by Gemini." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
@@ -17,13 +17,15 @@
     <div class="logo">
       <span class="logo-icon">⚡</span>
       <span class="logo-text">InsightForge</span>
-      <span class="logo-badge">Day 1</span>
+      <span class="logo-badge">Day 3</span>
     </div>
     <nav class="tabs" role="tablist">
-      <button class="tab active" data-tab="ingest" role="tab" id="tab-ingest">📄 Ingest</button>
-      <button class="tab" data-tab="chat" role="tab" id="tab-chat">🤖 Chat</button>
-      <button class="tab" data-tab="retrieve" role="tab" id="tab-retrieve">🔍 Retrieve</button>
-      <button class="tab" data-tab="jobs" role="tab" id="tab-jobs">📊 Jobs</button>
+      <button class="tab active" data-tab="ingest"   role="tab">📄 Ingest</button>
+      <button class="tab"        data-tab="chat"     role="tab">🤖 Chat</button>
+      <button class="tab"        data-tab="retrieve" role="tab">🔍 Retrieve</button>
+      <button class="tab"        data-tab="research" role="tab">🔬 Research</button>
+      <button class="tab"        data-tab="sessions" role="tab">📋 Sessions</button>
+      <button class="tab"        data-tab="jobs"     role="tab">📊 Jobs</button>
     </nav>
     <div class="status-dot" id="api-status" title="API status">
       <span class="dot"></span><span class="status-label">Connecting…</span>
@@ -60,7 +62,15 @@
       </button>
     </div>
 
-    <!-- Active job card -->
+    <!-- Ingested documents library -->
+    <div class="ingested-header">
+      <h2 class="ingested-title">Ingested Documents</h2>
+      <button class="btn-link" id="refresh-docs-btn">↻ Refresh</button>
+    </div>
+    <div id="ingested-docs-list" class="ingested-docs-list">
+      <p class="empty-state" id="ingested-empty">Loading…</p>
+    </div>
+
     <div class="card job-card hidden" id="active-job">
       <div class="job-header">
         <div>
@@ -103,16 +113,6 @@
     </form>
   </section>
 
-  <!-- ─ Jobs Panel ─ -->
-  <section class="panel hidden" id="panel-jobs">
-    <div class="panel-header">
-      <h1 class="panel-title">Job History</h1>
-      <p class="panel-sub">All ingestion jobs tracked this session.</p>
-    </div>
-    <div class="jobs-list" id="jobs-list">
-      <p class="empty-state">No jobs yet. Start an ingestion to see progress here.</p>
-    </div>
-  </section>
   <!-- ─ Retrieve Panel ─ -->
   <section class="panel hidden" id="panel-retrieve">
     <div class="panel-header">
@@ -139,6 +139,99 @@
     </div>
 
     <div class="retrieve-results" id="retrieve-results"></div>
+  </section>
+
+  <!-- ─ Research Panel ─ -->
+  <section class="panel hidden" id="panel-research">
+    <div class="panel-header">
+      <h1 class="panel-title">Multi-Agent Research</h1>
+      <p class="panel-sub">A crew of 6 specialist agents — Planner, Retriever, Table Analyst, Chart Analyst, Synthesizer, Critic — collaborate to produce a citation-rich report.</p>
+    </div>
+
+    <!-- Query input card -->
+    <div class="card research-input-card">
+
+      <!-- Row 1: query textarea -->
+      <textarea class="research-textarea" id="research-query"
+        placeholder="What are the key findings, metrics, and trends in the documents?" rows="3"></textarea>
+
+      <!-- Row 2: job ids (full width) -->
+      <div class="research-field">
+        <label class="form-label">
+          Job IDs
+          <span class="muted-hint">— comma-separated, or leave blank to search all documents</span>
+        </label>
+        <input class="chat-input" id="research-job-ids" type="text"
+          placeholder="e.g. f381b731-c541-4185-b639-f850a305b106" />
+      </div>
+
+      <!-- Row 3: cost · HITL · button -->
+      <div class="research-controls-row">
+        <div class="research-inline-field">
+          <label class="form-label">Max cost (USD)</label>
+          <input class="chat-input research-cost-input" id="research-max-cost"
+            type="number" value="0.50" min="0.01" max="5.00" step="0.10" />
+        </div>
+
+        <div class="research-inline-field research-hitl-field">
+          <label class="form-label">HITL approval</label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="research-hitl" />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <button class="btn btn-primary" id="research-btn" style="margin-left:auto">
+          <span class="btn-icon">🔬</span> Run Research
+        </button>
+      </div>
+
+    </div>
+
+    <!-- Live agent pipeline progress -->
+    <div class="card research-pipeline hidden" id="research-pipeline">
+      <div class="pipeline-header">
+        <span class="pipeline-title">Agent Pipeline</span>
+        <span class="pipeline-session" id="pipeline-session-id"></span>
+      </div>
+      <div class="pipeline-agents" id="pipeline-agents">
+        <!-- Filled dynamically -->
+      </div>
+    </div>
+
+    <!-- Results -->
+    <div id="research-results" class="research-results"></div>
+  </section>
+
+  <!-- ─ Sessions Panel ─ -->
+  <section class="panel hidden" id="panel-sessions">
+    <div class="panel-header">
+      <h1 class="panel-title">Research Sessions</h1>
+      <p class="panel-sub">View past research sessions, inspect message traces, and resume paused HITL sessions.</p>
+    </div>
+
+    <div class="session-lookup-row">
+      <input class="chat-input" id="session-id-input" type="text"
+        placeholder="Paste a session ID to look it up…" />
+      <button class="btn btn-primary" id="session-lookup-btn">
+        <span class="btn-icon">🔎</span> Look Up
+      </button>
+    </div>
+
+    <div id="sessions-list" class="sessions-list">
+      <p class="empty-state">No sessions this tab session. Run a research query first.</p>
+    </div>
+  </section>
+
+  <!-- ─ Jobs Panel ─ -->
+  <section class="panel hidden" id="panel-jobs">
+    <div class="panel-header">
+      <h1 class="panel-title">Job History</h1>
+      <p class="panel-sub">All ingestion jobs tracked this session.</p>
+    </div>
+    <div class="jobs-list" id="jobs-list">
+      <p class="empty-state">No jobs yet. Start an ingestion to see progress here.</p>
+    </div>
   </section>
 
 </main>
