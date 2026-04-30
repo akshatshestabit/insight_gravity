@@ -1,12 +1,12 @@
 """
 Plain-text parser for .txt, .md, .rst, .csv files.
-Splits content into CHUNK_SIZE character chunks.
+Splits content intelligently using LangChain's RecursiveCharacterTextSplitter.
 """
 from pathlib import Path
 
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from ingestion.parsers.base import BaseParser, ParseResult, TextChunk
 
-CHUNK_SIZE = 1000
 SUPPORTED = {".txt", ".md", ".rst", ".csv", ".log"}
 
 
@@ -23,12 +23,20 @@ class TextParser(BaseParser):
             with open(file_path, "r", encoding="utf-8", errors="replace") as f:
                 text = f.read()
 
-            for idx, i in enumerate(range(0, len(text), CHUNK_SIZE)):
-                segment = text[i : i + CHUNK_SIZE]
+            # Smart chunking that respects paragraphs, sentences, and words
+            splitter = RecursiveCharacterTextSplitter(
+                chunk_size=1000,
+                chunk_overlap=150,
+                separators=["\n\n", "\n", " ", ""]
+            )
+            
+            chunks = splitter.split_text(text)
+
+            for idx, segment in enumerate(chunks):
                 if segment.strip():
                     result.text_chunks.append(
                         TextChunk(
-                            content=segment,
+                            content=segment.strip(),
                             page_number=1,
                             chunk_index=idx,
                             metadata={"source": path.name},

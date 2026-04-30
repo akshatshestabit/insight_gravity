@@ -75,6 +75,6 @@ def retrieve(
             hits.extend(qdrant_search(col, vec, top_k=top_k, job_id=job_id))
         return reciprocal_rank_fusion(hits, top_k=top_k)
 
-    final = crag_retry(query, final, _retry, threshold=0.3)
+    final = crag_retry(query, final, _retry, threshold=0.015)
 
     return final[:top_k]
