@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -7,6 +7,8 @@ from backend.database import init_db
 from backend.routers import chat, ingest, retrieve
 from backend.routers import research, session as session_router
 from backend.routers.eval_router import router as eval_router
+from backend.routers.stream import router as stream_router
+from backend.metrics import PrometheusMiddleware, metrics_endpoint
 from guardrails.middleware import GuardrailsMiddleware
 from audit.chain import log_request
 
@@ -34,6 +36,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Day 5: Prometheus metrics
+app.add_middleware(PrometheusMiddleware)
 # Day 4: guardrails on all LLM-facing endpoints
 app.add_middleware(GuardrailsMiddleware, redact_output_pii=True)
 
@@ -48,6 +52,8 @@ app.include_router(session_router.router)
 
 # Routers — Day 4: eval, red-team, guardrail validation, audit chain
 app.include_router(eval_router)
+# Routers — Day 5: streaming research, semantic cache management
+app.include_router(stream_router)
 
 # Mount the frontend UI (must be absolute or relative to the working dir)
 app.mount("/ui", StaticFiles(directory="frontend", html=True), name="frontend")
@@ -61,6 +67,11 @@ async def root():
 @app.get("/health", tags=["health"])
 async def health():
     return {"status": "healthy"}
+
+
+@app.get("/metrics", tags=["observability"])
+async def prometheus_metrics(request: Request):
+    return await metrics_endpoint(request)
 
 
 @app.get("/agents", tags=["health"])

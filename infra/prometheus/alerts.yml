@@ -1,0 +1,58 @@
+groups:
+  - name: insightforge
+    rules:
+
+      # High LLM cost
+      - alert: HighLLMCostRate
+        expr: rate(insightforge_llm_cost_usd_total[5m]) > 0.10
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "LLM cost exceeding $0.10/min"
+          description: "Current rate: {{ $value | humanize }} USD/min"
+
+      # High guardrail block rate (possible attack)
+      - alert: GuardrailBlockSpike
+        expr: rate(insightforge_guardrail_blocks_total[5m]) > 5
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Guardrail blocking >5 req/min — possible injection attack"
+
+      # High API latency
+      - alert: HighAPILatency
+        expr: histogram_quantile(0.95, rate(insightforge_http_request_duration_seconds_bucket[5m])) > 30
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "P95 API latency > 30s"
+
+      # Low critique score (answer quality degradation)
+      - alert: LowCritiqueScore
+        expr: histogram_quantile(0.5, rate(insightforge_research_critique_score_bucket[30m])) < 0.6
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Median critique score dropped below 0.6 — quality degradation"
+
+      # Ingest failures
+      - alert: IngestFailureRate
+        expr: rate(insightforge_ingest_documents_total{status="failed"}[5m]) > 0.2
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Document ingest failure rate > 20%"
+
+      # Semantic cache hit rate dropping
+      - alert: CacheHitRateLow
+        expr: rate(insightforge_retrieval_cache_hits_total[30m]) / (rate(insightforge_retrieval_cache_hits_total[30m]) + rate(insightforge_retrieval_cache_misses_total[30m])) < 0.20
+        for: 15m
+        labels:
+          severity: info
+        annotations:
+          summary: "Semantic cache hit rate < 20%"

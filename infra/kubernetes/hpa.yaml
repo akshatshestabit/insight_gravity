@@ -1,0 +1,100 @@
+---
+# HPA for InsightForge backend — scale on CPU + memory
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: insightforge-backend-hpa
+  namespace: insightforge
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: insightforge-backend
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+    # Custom metric: P95 request latency > 10s → scale out
+    - type: Pods
+      pods:
+        metric:
+          name: insightforge_http_request_duration_seconds_p95
+        target:
+          type: AverageValue
+          averageValue: "10"
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Pods; value: 2; periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods; value: 1; periodSeconds: 120
+
+---
+# HPA for Celery workers — scale on Redis queue depth (KEDA)
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: insightforge-worker-scaledobject
+  namespace: insightforge
+spec:
+  scaleTargetRef:
+    name: insightforge-worker
+  minReplicaCount: 2
+  maxReplicaCount: 20
+  triggers:
+    - type: redis
+      metadata:
+        address: redis-master:6379
+        listName: celery
+        listLength: "10"     # scale out when queue depth > 10
+    - type: cpu
+      metricType: Utilization
+      metadata:
+        value: "70"
+
+---
+# HPA for vLLM VLM server (GPU-based) — scale on GPU utilization
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: insightforge-vllm-hpa
+  namespace: insightforge
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: insightforge-vllm
+  minReplicas: 1
+  maxReplicas: 4
+  metrics:
+    - type: External
+      external:
+        metric:
+          name: nvidia_gpu_utilization
+          selector:
+            matchLabels:
+              app: insightforge-vllm
+        target:
+          type: AverageValue
+          averageValue: "80"   # scale when GPU > 80%
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 120
+      policies:
+        - type: Pods; value: 1; periodSeconds: 120
+    scaleDown:
+      stabilizationWindowSeconds: 600   # GPU instances are expensive — wait 10min before scale-down

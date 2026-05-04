@@ -111,3 +111,50 @@ guardrail-test:  ## Quick guardrail smoke test
 
 eval-health:  ## Check Day 4 component health
 	@curl -s http://localhost:8000/eval/health | python3 -m json.tool
+
+# ── Day 5: Scale & Deploy ─────────────────────────────────────────────────────
+
+load-test:  ## Locust load test (USERS=100 RATE=10 TIME=5m)
+	$(VENV)/bin/locust -f infra/load_test/locustfile.py \
+	  --host http://localhost:8000 \
+	  --users $(if $(USERS),$(USERS),50) \
+	  --spawn-rate $(if $(RATE),$(RATE),5) \
+	  --run-time $(if $(TIME),$(TIME),2m) \
+	  --headless
+
+load-test-ui:  ## Locust load test with web dashboard (open http://localhost:8089)
+	$(VENV)/bin/locust -f infra/load_test/locustfile.py --host http://localhost:8000
+
+cache-stats:  ## Show semantic cache hit rate
+	@curl -s http://localhost:8000/cache/stats | python3 -m json.tool
+
+cache-flush:  ## Flush semantic cache
+	@curl -s -X POST http://localhost:8000/cache/invalidate | python3 -m json.tool
+
+metrics:  ## Show Prometheus metrics snapshot
+	@curl -s http://localhost:8000/metrics | grep insightforge | head -40
+
+docker-build:  ## Build all Docker images
+	docker build -f Dockerfile.backend -t insightforge/backend:latest .
+	docker build -f Dockerfile.worker  -t insightforge/worker:latest  .
+
+docker-push:  ## Push images to registry (REGISTRY=ghcr.io/your-org)
+	docker tag insightforge/backend:latest $(REGISTRY)/insightforge/backend:latest
+	docker tag insightforge/worker:latest  $(REGISTRY)/insightforge/worker:latest
+	docker push $(REGISTRY)/insightforge/backend:latest
+	docker push $(REGISTRY)/insightforge/worker:latest
+
+helm-lint:  ## Lint Helm chart
+	helm lint infra/helm/insightforge
+
+helm-install:  ## Install to Kubernetes cluster (NAMESPACE=insightforge)
+	helm upgrade --install insightforge infra/helm/insightforge \
+	  --namespace $(if $(NAMESPACE),$(NAMESPACE),insightforge) \
+	  --create-namespace \
+	  --wait
+
+stream-test:  ## Quick streaming research test
+	@curl -s -X POST http://localhost:8000/stream/research \
+	  -H "Content-Type: application/json" \
+	  -d '{"query":"What are the key revenue metrics?","job_ids":[]}' \
+	  --no-buffer | head -30
