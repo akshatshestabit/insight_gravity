@@ -8,6 +8,7 @@ from backend.routers import chat, ingest, retrieve
 from backend.routers import research, session as session_router
 from backend.routers.eval_router import router as eval_router
 from backend.routers.stream import router as stream_router
+from backend.routers.mcp_router import router as mcp_router
 from backend.metrics import PrometheusMiddleware, metrics_endpoint
 from guardrails.middleware import GuardrailsMiddleware
 from audit.chain import log_request
@@ -54,6 +55,8 @@ app.include_router(session_router.router)
 app.include_router(eval_router)
 # Routers — Day 5: streaming research, semantic cache management
 app.include_router(stream_router)
+# Routers — Day 3: MCP tool tester
+app.include_router(mcp_router)
 
 # Mount the frontend UI (must be absolute or relative to the working dir)
 app.mount("/ui", StaticFiles(directory="frontend", html=True), name="frontend")

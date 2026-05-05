@@ -37,6 +37,7 @@ document.querySelectorAll(".tab").forEach(btn => {
     if (btn.dataset.tab === "sessions") renderSessionsList();
     if (btn.dataset.tab === "eval")     loadEvalDashboard();
     if (btn.dataset.tab === "citations") renderCitationViewer();
+    if (btn.dataset.tab === "mcp")      initMcpTab();
   });
 });
 
@@ -842,3 +843,156 @@ function renderJobsHistory() {
 // ── Utils ─────────────────────────────────────────────────────────────────────
 function formatBytes(b) { if(b<1024)return`${b} B`;if(b<1024**2)return`${(b/1024).toFixed(1)} KB`;return`${(b/1024**2).toFixed(1)} MB`; }
 function escHtml(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+// ── MCP Tools Tab ─────────────────────────────────────────────────────────────
+let _mcpInited = false;
+
+function initMcpTab() {
+  if (_mcpInited) return;
+  _mcpInited = true;
+
+  // Sub-tab switching
+  document.querySelectorAll(".mcp-tab").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".mcp-tab").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(".mcp-panel").forEach(p => p.classList.add("hidden"));
+      btn.classList.add("active");
+      $(`mcp-panel-${btn.dataset.mcp}`).classList.remove("hidden");
+      if (btn.dataset.mcp === "audit") loadAuditLog();
+    });
+  });
+
+  // ── CRM ──
+  $("crm-lookup-btn").addEventListener("click", async () => {
+    const id = $("crm-id-input").value.trim() || "CUST-001";
+    const r = await fetch(`${API}/mcp/crm/${encodeURIComponent(id)}`);
+    showMcpResult("crm-result", await r.json());
+  });
+
+  $("crm-search-btn").addEventListener("click", async () => {
+    const body = {};
+    const name = $("crm-name-input").value.trim();
+    const tier = $("crm-tier-input").value;
+    if (name) body.name = name;
+    if (tier) body.tier = tier;
+    const r = await fetch(`${API}/mcp/crm/search`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    showMcpResult("crm-result", await r.json());
+  });
+
+  // ── Jira ──
+  $("jira-create-btn").addEventListener("click", async () => {
+    const summary = $("jira-summary").value.trim();
+    const description = $("jira-desc").value.trim();
+    if (!summary || !description) { alert("Summary and description are required."); return; }
+    const body = {
+      summary, description,
+      priority: $("jira-priority").value,
+      issue_type: $("jira-type").value,
+    };
+    const assignee = $("jira-assignee").value.trim();
+    if (assignee) body.assignee = assignee;
+    const r = await fetch(`${API}/mcp/jira/ticket`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    showMcpResult("jira-result", await r.json());
+  });
+
+  $("jira-get-btn").addEventListener("click", async () => {
+    const key = $("jira-key-input").value.trim();
+    if (!key) { alert("Enter a ticket key like INS-1001."); return; }
+    const r = await fetch(`${API}/mcp/jira/ticket/${encodeURIComponent(key)}`);
+    showMcpResult("jira-result", await r.json());
+  });
+
+  $("jira-list-btn").addEventListener("click", async () => {
+    const r = await fetch(`${API}/mcp/jira/tickets`);
+    showMcpResult("jira-result", await r.json());
+  });
+
+  // ── Slack ──
+  $("slack-post-btn").addEventListener("click", async () => {
+    const channel = $("slack-channel").value.trim();
+    const message = $("slack-message").value.trim();
+    if (!channel || !message) { alert("Channel and message are required."); return; }
+    const body = { channel, message, username: $("slack-username").value.trim() || "InsightForge Bot" };
+    const r = await fetch(`${API}/mcp/slack/post`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    showMcpResult("slack-result", await r.json());
+  });
+
+  $("slack-channels-btn").addEventListener("click", async () => {
+    const r = await fetch(`${API}/mcp/slack/channels`);
+    showMcpResult("slack-result", await r.json());
+  });
+
+  // ── Email ──
+  $("email-draft-btn").addEventListener("click", async () => {
+    const to = $("email-to").value.trim();
+    const subject = $("email-subject").value.trim();
+    const body_text = $("email-body").value.trim();
+    if (!to || !subject || !body_text) { alert("To, subject, and body are required."); return; }
+    const body = { to, subject, body: body_text };
+    const cc = $("email-cc").value.trim();
+    if (cc) body.cc = cc;
+    const r = await fetch(`${API}/mcp/email/draft`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    const data = await r.json();
+    showMcpResult("email-result", data);
+    // Show "Send" button if draft_id returned
+    if (data.draft_id) {
+      const resultEl = $("email-result");
+      const sendBtn = document.createElement("button");
+      sendBtn.className = "btn btn-primary";
+      sendBtn.style.marginTop = "10px";
+      sendBtn.textContent = `Send Draft ${data.draft_id}`;
+      sendBtn.addEventListener("click", async () => {
+        const sr = await fetch(`${API}/mcp/email/send/${data.draft_id}`, { method: "POST" });
+        showMcpResult("email-result", await sr.json());
+      });
+      resultEl.appendChild(sendBtn);
+    }
+  });
+
+  $("email-drafts-btn").addEventListener("click", async () => {
+    const r = await fetch(`${API}/mcp/email/drafts`);
+    showMcpResult("email-result", await r.json());
+  });
+
+  // ── Audit Log ──
+  $("audit-refresh-btn").addEventListener("click", loadAuditLog);
+}
+
+async function loadAuditLog() {
+  const list = $("audit-log-list");
+  list.innerHTML = `<p class="empty-state">Loading…</p>`;
+  try {
+    const r = await fetch(`${API}/mcp/audit?limit=30`);
+    const entries = await r.json();
+    if (!entries.length) { list.innerHTML = `<p class="empty-state">No audit entries yet. Call a tool first.</p>`; return; }
+    list.innerHTML = entries.map(e => `
+      <div class="audit-entry ${e._valid ? 'audit-ok' : 'audit-tampered'}">
+        <div class="audit-entry-header">
+          <span class="audit-tool">${escHtml(e.tool_name)}</span>
+          <span class="audit-sig ${e._valid ? 'sig-ok' : 'sig-fail'}">${e._valid ? '✅ Valid' : '❌ Tampered'}</span>
+          <span class="audit-ts">${new Date(e.timestamp).toLocaleTimeString()}</span>
+        </div>
+        <div class="audit-entry-body">
+          <span class="muted-hint">Session: ${escHtml(e.session_id||'—')}</span>
+          <span class="muted-hint">Result: ${escHtml((e.result_summary||'').slice(0,80))}</span>
+        </div>
+        <code class="audit-sig-full">${escHtml((e.signature||'').slice(0,32))}…</code>
+      </div>`).join("");
+  } catch (err) {
+    list.innerHTML = `<div class="retrieve-error">⚠️ ${escHtml(err.message)}</div>`;
+  }
+}
+
+function showMcpResult(elId, data) {
+  const el = $(elId);
+  el.classList.remove("hidden");
+  el.innerHTML = `<pre class="mcp-json">${escHtml(JSON.stringify(data, null, 2))}</pre>`;
+}

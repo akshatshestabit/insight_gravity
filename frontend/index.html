@@ -27,6 +27,7 @@
       <button class="tab"        data-tab="eval"     >📊 Eval</button>
       <button class="tab"        data-tab="sessions" >📋 Sessions</button>
       <button class="tab"        data-tab="jobs"     >⚙️ Jobs</button>
+      <button class="tab"        data-tab="mcp"      >🔌 MCP Tools</button>
     </nav>
     <div class="header-right">
       <div class="cache-badge hidden" id="cache-badge" title="Semantic cache hit">⚡ Cached</div>
@@ -255,6 +256,129 @@
     </div>
     <div class="jobs-list" id="jobs-list">
       <p class="empty-state">No jobs yet.</p>
+    </div>
+  </section>
+
+  <!-- ─ MCP Tools ─ -->
+  <section class="panel hidden" id="panel-mcp">
+    <div class="panel-header">
+      <h1 class="panel-title">MCP Tool Tester</h1>
+      <p class="panel-sub">Test CRM, Jira, Slack, and Email MCP tools. Every call is HMAC-signed and appears in the Audit Log below.</p>
+    </div>
+
+    <!-- Sub-tabs -->
+    <div class="mcp-tabs">
+      <button class="mcp-tab active" data-mcp="crm">🏢 CRM</button>
+      <button class="mcp-tab" data-mcp="jira">🎫 Jira</button>
+      <button class="mcp-tab" data-mcp="slack">💬 Slack</button>
+      <button class="mcp-tab" data-mcp="email">✉️ Email</button>
+      <button class="mcp-tab" data-mcp="audit">🔒 Audit Log</button>
+    </div>
+
+    <!-- CRM -->
+    <div class="mcp-panel" id="mcp-panel-crm">
+      <div class="card" style="margin-bottom:16px">
+        <div class="eval-section-title" style="margin:0 0 12px">Lookup by ID</div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <input class="chat-input" id="crm-id-input" placeholder="CUST-001" style="width:200px" />
+          <button class="btn btn-primary" id="crm-lookup-btn">Lookup</button>
+          <span class="muted-hint">Try: CUST-001, CUST-002, CUST-003</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="eval-section-title" style="margin:0 0 12px">Search CRM</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+          <input class="chat-input" id="crm-name-input" placeholder="Name contains…" style="width:200px" />
+          <select class="select" id="crm-tier-input">
+            <option value="">Any tier</option>
+            <option>Enterprise</option>
+            <option>Pro</option>
+            <option>Starter</option>
+          </select>
+          <button class="btn btn-primary" id="crm-search-btn">Search</button>
+        </div>
+      </div>
+      <div id="crm-result" class="mcp-result hidden"></div>
+    </div>
+
+    <!-- Jira -->
+    <div class="mcp-panel hidden" id="mcp-panel-jira">
+      <div class="card" style="margin-bottom:16px">
+        <div class="eval-section-title" style="margin:0 0 12px">Create Ticket</div>
+        <div style="display:grid;gap:10px">
+          <input class="chat-input" id="jira-summary" placeholder="Summary / title" />
+          <textarea class="research-textarea" id="jira-desc" rows="2" placeholder="Description"></textarea>
+          <div style="display:flex;gap:10px">
+            <select class="select" id="jira-priority">
+              <option>Medium</option><option>High</option><option>Low</option><option>Highest</option><option>Lowest</option>
+            </select>
+            <select class="select" id="jira-type">
+              <option>Task</option><option>Bug</option><option>Story</option><option>Epic</option>
+            </select>
+            <input class="chat-input" id="jira-assignee" placeholder="Assignee (optional)" style="width:160px" />
+            <button class="btn btn-primary" id="jira-create-btn">Create</button>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="eval-section-title" style="margin:0 0 12px">List / Lookup</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+          <input class="chat-input" id="jira-key-input" placeholder="INS-1001" style="width:140px" />
+          <button class="btn btn-primary" id="jira-get-btn">Get Ticket</button>
+          <button class="btn" id="jira-list-btn" style="background:var(--surface-2)">List All</button>
+        </div>
+      </div>
+      <div id="jira-result" class="mcp-result hidden"></div>
+    </div>
+
+    <!-- Slack -->
+    <div class="mcp-panel hidden" id="mcp-panel-slack">
+      <div class="card" style="margin-bottom:16px">
+        <div class="eval-section-title" style="margin:0 0 12px">Post Message</div>
+        <div style="display:grid;gap:10px">
+          <div style="display:flex;gap:10px">
+            <input class="chat-input" id="slack-channel" placeholder="#channel" style="width:180px" />
+            <input class="chat-input" id="slack-username" placeholder="Username" value="InsightForge Bot" style="width:180px" />
+          </div>
+          <textarea class="research-textarea" id="slack-message" rows="2" placeholder="Message text…"></textarea>
+          <div style="display:flex;gap:10px">
+            <button class="btn btn-primary" id="slack-post-btn">Post</button>
+            <button class="btn" id="slack-channels-btn" style="background:var(--surface-2)">List Channels</button>
+          </div>
+        </div>
+      </div>
+      <div id="slack-result" class="mcp-result hidden"></div>
+    </div>
+
+    <!-- Email -->
+    <div class="mcp-panel hidden" id="mcp-panel-email">
+      <div class="card" style="margin-bottom:16px">
+        <div class="eval-section-title" style="margin:0 0 12px">Draft Email</div>
+        <div style="display:grid;gap:10px">
+          <div style="display:flex;gap:10px">
+            <input class="chat-input" id="email-to" placeholder="To (email)" style="flex:1" />
+            <input class="chat-input" id="email-cc" placeholder="CC (optional)" style="flex:1" />
+          </div>
+          <input class="chat-input" id="email-subject" placeholder="Subject" />
+          <textarea class="research-textarea" id="email-body" rows="3" placeholder="Email body…"></textarea>
+          <div style="display:flex;gap:10px">
+            <button class="btn btn-primary" id="email-draft-btn">Save Draft</button>
+            <button class="btn" id="email-drafts-btn" style="background:var(--surface-2)">View Drafts</button>
+          </div>
+        </div>
+      </div>
+      <div id="email-result" class="mcp-result hidden"></div>
+    </div>
+
+    <!-- Audit Log -->
+    <div class="mcp-panel hidden" id="mcp-panel-audit">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <div class="eval-section-title" style="margin:0">HMAC-Signed Audit Log</div>
+          <button class="btn-link" id="audit-refresh-btn">↻ Refresh</button>
+        </div>
+        <div id="audit-log-list"><p class="empty-state">Loading…</p></div>
+      </div>
     </div>
   </section>
 
