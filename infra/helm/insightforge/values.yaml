@@ -1,0 +1,107 @@
+# Default values for InsightForge Helm chart
+# Override with: helm install insightforge ./insightforge -f my-values.yaml
+
+replicaCount:
+  backend: 2
+  worker:  3
+
+image:
+  backend:
+    repository: insightforge/backend
+    tag: latest
+    pullPolicy: IfNotPresent
+  worker:
+    repository: insightforge/worker
+    tag: latest
+
+resources:
+  backend:
+    requests: {cpu: 500m, memory: 512Mi}
+    limits:   {cpu: 2000m, memory: 2Gi}
+  worker:
+    requests: {cpu: 1000m, memory: 1Gi}
+    limits:   {cpu: 2000m, memory: 4Gi}
+
+autoscaling:
+  backend:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+  worker:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 20
+    # Scale on Celery queue depth (requires KEDA)
+    kedaEnabled: false
+    queueDepthTarget: 10
+
+env:
+  GEMINI_MODEL: gemini-2.5-flash
+  VLM_ENABLED: "false"
+  VLM_BASE_URL: http://vllm:8001/v1
+  LANGFUSE_HOST: https://cloud.langfuse.com
+  INSIGHTFORGE_AUTH_REQUIRED: "true"
+
+secrets:
+  # Create these secrets before deploying:
+  # kubectl create secret generic insightforge-secrets \
+  #   --from-literal=GEMINI_API_KEY=... \
+  #   --from-literal=POSTGRES_PASSWORD=... \
+  #   --from-literal=LANGFUSE_PUBLIC_KEY=... \
+  #   --from-literal=LANGFUSE_SECRET_KEY=...
+  secretName: insightforge-secrets
+
+postgresql:
+  enabled: true
+  auth:
+    username: insightforge
+    database: insightforge
+    existingSecret: insightforge-secrets
+    secretKeys:
+      adminPasswordKey: POSTGRES_PASSWORD
+
+redis:
+  enabled: true
+  auth: {enabled: false}
+  master:
+    persistence: {size: 8Gi}
+
+qdrant:
+  enabled: true
+  replicaCount: 1
+  persistence: {size: 50Gi}
+
+minio:
+  enabled: true
+  mode: standalone
+  persistence: {size: 100Gi}
+
+prometheus:
+  enabled: true
+  serviceMonitor: {enabled: true}
+
+grafana:
+  enabled: true
+  adminPassword: insightforge
+  dashboardsConfigMaps:
+    - configMapName: insightforge-dashboards
+      fileName: insightforge.json
+
+ingress:
+  enabled: false
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+  hosts:
+    - host: insightforge.example.com
+      paths: [{path: /, pathType: Prefix}]
+  tls: []
+
+serviceAccount:
+  create: true
+  name: insightforge
+
+podDisruptionBudget:
+  backend: {minAvailable: 1}
+  worker:  {minAvailable: 1}

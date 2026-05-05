@@ -100,7 +100,7 @@ def search(
             query_vector=query_vector,
             limit=top_k,
             query_filter=filter_,
-            score_threshold=0.65,
+            score_threshold=0.70,
             with_payload=True,
         )
         return [

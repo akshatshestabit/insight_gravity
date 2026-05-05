@@ -1,125 +1,108 @@
 """
-FastAPI guardrails middleware.
+FastAPI guardrails middleware — pure ASGI (no BaseHTTPMiddleware).
 
-Intercepts every request/response to:
-1. Validate and clean query inputs (injection, PII, toxicity)
-2. Redact PII from LLM outputs
-3. Log guardrail events to the audit chain
+Avoids the known Starlette BaseHTTPMiddleware bug where re-emitting
+a response body causes "Response content longer than Content-Length".
 
-Applied selectively to /chat, /research, /retrieve endpoints.
+Applied to: /chat, /research, /retrieve
 """
 from __future__ import annotations
 
 import json
 import logging
-import time
 from typing import Callable
 
-from fastapi import Request, Response
 from fastapi.responses import JSONResponse
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.types import ASGIApp
+from starlette.types import ASGIApp, Receive, Scope, Send
 
-from guardrails.validators import validate_query, validate_output
+from guardrails.validators import validate_query
 
 logger = logging.getLogger(__name__)
 
-# Endpoints where guardrails are active
 _GUARDED_PATHS = {"/chat", "/research", "/retrieve"}
 
 
-class GuardrailsMiddleware(BaseHTTPMiddleware):
-    """
-    Thin middleware that validates inputs and sanitizes outputs for LLM endpoints.
-    Heavy-handed blocking happens only on injection / toxicity failures.
-    PII redaction in outputs is always on.
-    """
+class GuardrailsMiddleware:
+    """Pure ASGI middleware — correctly passes body to downstream handlers."""
 
     def __init__(self, app: ASGIApp, redact_output_pii: bool = True):
-        super().__init__(app)
+        self.app = app
         self.redact_output_pii = redact_output_pii
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        path = request.url.path
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
 
-        # Only guard LLM-facing endpoints
+        path   = scope.get("path", "")
+        method = scope.get("method", "")
+
         if not any(path.startswith(p) for p in _GUARDED_PATHS):
-            return await call_next(request)
+            await self.app(scope, receive, send)
+            return
 
-        t0 = time.perf_counter()
+        # ── Read full body from ASGI stream ──────────────────────────────────
+        body_chunks: list[bytes] = []
+        if method == "POST":
+            while True:
+                msg = await receive()
+                if msg["type"] == "http.request":
+                    body_chunks.append(msg.get("body", b""))
+                    if not msg.get("more_body", False):
+                        break
 
-        # ── Input guard ───────────────────────────────────────────────────────
-        if request.method == "POST":
+        raw_body = b"".join(body_chunks)
+        new_body = raw_body
+
+        # ── Input validation ──────────────────────────────────────────────────
+        if raw_body:
             try:
-                body_bytes = await request.body()
-                body = json.loads(body_bytes) if body_bytes else {}
+                body = json.loads(raw_body)
                 query = body.get("query") or body.get("message") or ""
 
                 if query:
                     result = validate_query(query)
                     if not result.valid:
-                        logger.warning("Input blocked at %s: %s", path, result.errors)
+                        logger.warning("Guardrail blocked %s: %s", path, result.errors)
                         _log_guardrail_event("input_blocked", path, query, result.errors)
-                        return JSONResponse(
-                            status_code=422,
-                            content={"detail": result.errors[0], "guardrail": "input_validation"},
-                        )
+                        resp_body = json.dumps({
+                            "detail": result.errors[0],
+                            "guardrail": "input_validation",
+                        }).encode()
+                        await send({
+                            "type": "http.response.start",
+                            "status": 422,
+                            "headers": [
+                                (b"content-type", b"application/json"),
+                                (b"content-length", str(len(resp_body)).encode()),
+                            ],
+                        })
+                        await send({"type": "http.response.body", "body": resp_body})
+                        return
 
-                    # Replace query with cleaned (PII-redacted) version
                     if result.cleaned_text != query:
-                        body["query" if "query" in body else "message"] = result.cleaned_text
-                        body_bytes = json.dumps(body).encode()
-                        if result.warnings:
-                            logger.info("Guardrail warnings at %s: %s", path, result.warnings)
+                        key = "query" if "query" in body else "message"
+                        body[key] = result.cleaned_text
+                        new_body = json.dumps(body).encode()
+                        logger.info("PII redacted from input at %s", path)
 
-                # Reconstruct request with potentially modified body
-                async def _body_override():
-                    return body_bytes
-
-                request._body = body_bytes  # type: ignore[attr-defined]
-
-            except (json.JSONDecodeError, Exception) as exc:
-                logger.debug("Guardrail body parse skipped: %s", exc)
-
-        # ── Call endpoint ─────────────────────────────────────────────────────
-        response = await call_next(request)
-
-        # ── Output guard ──────────────────────────────────────────────────────
-        if self.redact_output_pii and response.status_code == 200:
-            try:
-                body_bytes = b""
-                async for chunk in response.body_iterator:
-                    body_bytes += chunk
-                body = json.loads(body_bytes)
-
-                # Redact PII from answer/executive_summary fields
-                modified = False
-                for field in ("answer", "executive_summary", "content"):
-                    val = _deep_get(body, field)
-                    if val and isinstance(val, str):
-                        cleaned = validate_output(val, redact_pii_in_output=True)
-                        if cleaned.pii_detected:
-                            _deep_set(body, field, cleaned.cleaned_text)
-                            modified = True
-                            logger.info("PII redacted from output field '%s' at %s", field, path)
-
-                elapsed = round((time.perf_counter() - t0) * 1000, 1)
-                logger.debug("Guardrail processed %s in %dms (modified=%s)", path, elapsed, modified)
-
-                return Response(
-                    content=json.dumps(body),
-                    status_code=response.status_code,
-                    headers=dict(response.headers),
-                    media_type="application/json",
-                )
             except Exception as exc:
-                logger.debug("Output guard skipped: %s", exc)
+                logger.debug("Guardrail input parse skipped: %s", exc)
 
-        return response
+        # ── Rebuild receive with (possibly modified) body ─────────────────────
+        body_consumed = False
+
+        async def patched_receive() -> dict:
+            nonlocal body_consumed
+            if not body_consumed:
+                body_consumed = True
+                return {"type": "http.request", "body": new_body, "more_body": False}
+            return {"type": "http.request", "body": b"", "more_body": False}
+
+        await self.app(scope, patched_receive, send)
 
 
 def _log_guardrail_event(event_type: str, path: str, query: str, errors: list) -> None:
-    """Write guardrail events to the audit log."""
     try:
         from mcp.audit import log_mcp_invocation
         log_mcp_invocation(
@@ -133,27 +116,3 @@ def _log_guardrail_event(event_type: str, path: str, query: str, errors: list) -
         )
     except Exception:
         pass
-
-
-def _deep_get(d: dict, key: str) -> str | None:
-    """Search for *key* at any depth in a nested dict."""
-    if key in d:
-        return d[key]
-    for v in d.values():
-        if isinstance(v, dict):
-            r = _deep_get(v, key)
-            if r is not None:
-                return r
-    return None
-
-
-def _deep_set(d: dict, key: str, value: str) -> bool:
-    """Set *key* to *value* at the first occurrence in a nested dict."""
-    if key in d:
-        d[key] = value
-        return True
-    for v in d.values():
-        if isinstance(v, dict):
-            if _deep_set(v, key, value):
-                return True
-    return False

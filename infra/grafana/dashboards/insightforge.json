@@ -1,0 +1,279 @@
+{
+  "__inputs": [],
+  "__requires": [{"type": "grafana", "id": "grafana", "name": "Grafana", "version": "10.0.0"}],
+  "annotations": {"list": []},
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
+      "id": 100,
+      "title": "HTTP & API",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"lineWidth": 2},
+          "unit": "reqps"
+        }
+      },
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 1},
+      "id": 1,
+      "options": {"legend": {"displayMode": "list"}, "tooltip": {"mode": "multi"}},
+      "targets": [
+        {
+          "expr": "sum(rate(insightforge_http_requests_total[5m])) by (endpoint)",
+          "legendFormat": "{{endpoint}}"
+        }
+      ],
+      "title": "Request Rate by Endpoint (req/s)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "s", "color": {"mode": "palette-classic"}}},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 1},
+      "id": 2,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(insightforge_http_request_duration_seconds_bucket[5m])) by (le, endpoint))",
+          "legendFormat": "p50 {{endpoint}}"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(insightforge_http_request_duration_seconds_bucket[5m])) by (le, endpoint))",
+          "legendFormat": "p95 {{endpoint}}"
+        }
+      ],
+      "title": "API Latency p50 / p95",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short", "color": {"fixedColor": "red", "mode": "fixed"}}},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 1},
+      "id": 3,
+      "targets": [
+        {
+          "expr": "sum(rate(insightforge_http_requests_total{status=~\"4..|5..\"}[5m])) by (status)",
+          "legendFormat": "HTTP {{status}}"
+        }
+      ],
+      "title": "Error Rate (4xx/5xx)",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 9},
+      "id": 101,
+      "title": "LLM Cost & Tokens",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "currencyUSD"}},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 10},
+      "id": 4,
+      "targets": [
+        {
+          "expr": "sum(rate(insightforge_llm_cost_usd_total[5m])) by (agent) * 60",
+          "legendFormat": "{{agent}}"
+        }
+      ],
+      "title": "LLM Cost Rate (USD/min) by Agent",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 10},
+      "id": 5,
+      "targets": [
+        {
+          "expr": "sum(rate(insightforge_llm_tokens_total[5m])) by (agent, direction)",
+          "legendFormat": "{{agent}} {{direction}}"
+        }
+      ],
+      "title": "Token Rate by Agent",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "currencyUSD", "decimals": 4}},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 10},
+      "id": 6,
+      "options": {"reduceOptions": {"calcs": ["sum"]}},
+      "targets": [
+        {"expr": "sum(insightforge_llm_cost_usd_total)", "legendFormat": "Total Cost"}
+      ],
+      "title": "Total LLM Cost (all time)",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 18},
+      "id": 102,
+      "title": "Retrieval & Semantic Cache",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "s"}},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 19},
+      "id": 7,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(insightforge_retrieval_duration_seconds_bucket[5m])) by (le, modality))",
+          "legendFormat": "p95 {{modality}}"
+        }
+      ],
+      "title": "Retrieval Latency p95 by Modality",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "percentunit", "max": 1, "min": 0}},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 19},
+      "id": 8,
+      "targets": [
+        {
+          "expr": "rate(insightforge_retrieval_cache_hits_total[5m]) / (rate(insightforge_retrieval_cache_hits_total[5m]) + rate(insightforge_retrieval_cache_misses_total[5m]))",
+          "legendFormat": "Cache Hit Rate"
+        }
+      ],
+      "title": "Semantic Cache Hit Rate",
+      "type": "gauge"
+    },
+    {
+      "datasource": {"type": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 19},
+      "id": 9,
+      "targets": [
+        {"expr": "histogram_quantile(0.5, sum(rate(insightforge_retrieval_results_count_bucket[5m])) by (le))", "legendFormat": "p50 results"}
+      ],
+      "title": "Median Chunks per Retrieval",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 27},
+      "id": 103,
+      "title": "Guardrails & Security",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"fixedColor": "orange", "mode": "fixed"}}},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 28},
+      "id": 10,
+      "targets": [
+        {
+          "expr": "sum(rate(insightforge_guardrail_blocks_total[5m])) by (block_type)",
+          "legendFormat": "{{block_type}}"
+        }
+      ],
+      "title": "Guardrail Blocks per minute",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"fixedColor": "purple", "mode": "fixed"}}},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 28},
+      "id": 11,
+      "targets": [
+        {
+          "expr": "sum(rate(insightforge_guardrail_pii_redactions_total[5m])) by (location)",
+          "legendFormat": "PII redacted ({{location}})"
+        }
+      ],
+      "title": "PII Redactions per minute",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 36},
+      "id": 104,
+      "title": "Research Crew Quality",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "s"}},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 37},
+      "id": 12,
+      "targets": [
+        {"expr": "histogram_quantile(0.95, sum(rate(insightforge_research_duration_seconds_bucket[10m])) by (le))", "legendFormat": "p95 duration"}
+      ],
+      "title": "Research Session Duration p95",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short", "max": 1, "min": 0}},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 37},
+      "id": 13,
+      "targets": [
+        {"expr": "histogram_quantile(0.5, sum(rate(insightforge_research_critique_score_bucket[10m])) by (le))", "legendFormat": "Median Critique Score"}
+      ],
+      "title": "Median Critique Score",
+      "type": "gauge"
+    },
+    {
+      "datasource": {"type": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 37},
+      "id": 14,
+      "targets": [
+        {"expr": "sum(rate(insightforge_research_sessions_total[5m])) by (status)", "legendFormat": "{{status}}"}
+      ],
+      "title": "Research Session Rate by Status",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 45},
+      "id": 105,
+      "title": "Ingest Pipeline",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 46},
+      "id": 15,
+      "targets": [
+        {"expr": "sum(rate(insightforge_ingest_chunks_total[5m])) by (chunk_type)", "legendFormat": "{{chunk_type}}"}
+      ],
+      "title": "Ingest Throughput (chunks/s) by Type",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "s"}},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 46},
+      "id": 16,
+      "targets": [
+        {"expr": "histogram_quantile(0.95, sum(rate(insightforge_ingest_duration_seconds_bucket[10m])) by (le))", "legendFormat": "p95 ingest time"}
+      ],
+      "title": "Per-Document Ingest Duration p95",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "tags": ["insightforge", "ai", "production"],
+  "templating": {"list": []},
+  "time": {"from": "now-3h", "to": "now"},
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "InsightForge — Production Dashboard",
+  "uid": "insightforge-prod",
+  "version": 1
+}

@@ -22,6 +22,18 @@ from backend.config import settings
 
 TOOLS = [calculator, web_search, file_reader, retrieve_docs]
 
+SYSTEM_PROMPT = """You are a helpful document assistant with access to a knowledge base of indexed documents.
+
+Tool usage rules — follow strictly:
+1. ALWAYS call `retrieve_docs` FIRST for any question that could be answered from documents.
+2. Only call `web_search` if retrieve_docs returns "No relevant documents found" or the results are clearly insufficient.
+3. Use `calculator` only for math expressions.
+4. Use `file_reader` only when explicitly asked to read a specific local file.
+
+When retrieve_docs returns results, base your answer ONLY on those results.
+Do NOT use your general knowledge to supplement document answers — cite only what the documents say.
+"""
+
 
 def _build_agent():
     llm = ChatGoogleGenerativeAI(
@@ -29,7 +41,7 @@ def _build_agent():
         google_api_key=settings.GEMINI_API_KEY,
         temperature=0,
     )
-    return create_react_agent(llm, TOOLS)
+    return create_react_agent(llm, TOOLS, state_modifier=SYSTEM_PROMPT)
 
 
 def _extract_trace(messages: list) -> List[Dict[str, Any]]:
