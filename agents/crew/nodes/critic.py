@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import logging
 
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from agents.crew.state import (
@@ -97,14 +97,15 @@ async def critic_node(state: CrewState) -> dict:
 
     try:
         response = await llm.ainvoke([
-            HumanMessage(content=_SYSTEM_PROMPT),
+            SystemMessage(content=_SYSTEM_PROMPT),
             HumanMessage(content=prompt),
         ])
         raw = response.content.strip()
-        if raw.startswith("```"):
+        if "```" in raw:
             raw = raw.split("```")[1]
             if raw.startswith("json"):
                 raw = raw[4:]
+            raw = raw.strip()
         parsed = json.loads(raw)
         critique = CritiqueResult(
             passed=bool(parsed.get("passed", False)),

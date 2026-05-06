@@ -153,8 +153,8 @@ async def research(request: ResearchRequest, background_tasks: BackgroundTasks):
             )
             for c in final_report.get("citations", [])
         ],
-        table_analysis=final_report.get("table_analysis"),
-        chart_analysis=final_report.get("chart_analysis"),
+        table_analysis=final_report.get("table_analysis") or None,
+        chart_analysis=final_report.get("chart_analysis") or None,
     ) if final_report else None
 
     critique = CritiqueOut(
