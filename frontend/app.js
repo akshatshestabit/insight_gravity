@@ -10,8 +10,6 @@ const state = {
   files: [], sessionId: null, jobs: [],
   activeJobId: null, sseSource: null,
   researchSessions: [],
-  lastCitations: [],       // from most recent research
-  lastReport: null,
 };
 
 // ── Health ────────────────────────────────────────────────────────────────────
@@ -36,7 +34,6 @@ document.querySelectorAll(".tab").forEach(btn => {
     if (btn.dataset.tab === "jobs")     renderJobsHistory();
     if (btn.dataset.tab === "sessions") renderSessionsList();
     if (btn.dataset.tab === "eval")     loadEvalDashboard();
-    if (btn.dataset.tab === "citations") renderCitationViewer();
     if (btn.dataset.tab === "mcp")      initMcpTab();
   });
 });
@@ -265,219 +262,37 @@ function renderRetrieve(data) {
   });
 }
 
-// ── Research (Streaming) ──────────────────────────────────────────────────────
-const AGENT_META = {
-  planner:       {icon:"🗺️", label:"Planner",      desc:"Decomposing query…"},
-  retriever:     {icon:"🔍", label:"Retriever",     desc:"Searching documents…"},
-  table_analyst: {icon:"📊", label:"Table Analyst", desc:"Analysing tables…"},
-  chart_analyst: {icon:"🖼️",label:"Chart Analyst", desc:"Interpreting figures…"},
-  synthesizer:   {icon:"✍️", label:"Synthesizer",   desc:"Composing answer…"},
-  critic:        {icon:"🎯", label:"Critic",         desc:"Verifying quality…"},
-};
-const AGENT_ORDER = ["planner","retriever","table_analyst","chart_analyst","synthesizer","critic"];
-
+// ── Research ──────────────────────────────────────────────────────────────────
 $("research-btn").addEventListener("click", runResearch);
 
 async function runResearch() {
-  const query   = $("research-query").value.trim();
+  const query  = $("research-query").value.trim();
   if (!query) { alert("Enter a research query."); return; }
-  const jobIds  = $("research-job-ids").value.trim().split(",").map(s=>s.trim()).filter(Boolean);
-  const maxCost = parseFloat($("research-max-cost").value)||0.50;
-  const stream  = $("research-stream").checked;
+  const jobIds = $("research-job-ids").value.trim().split(",").map(s => s.trim()).filter(Boolean);
 
-  $("research-btn").disabled = true; $("research-btn").innerHTML = `<span class="btn-icon">⏳</span> Running…`;
+  $("research-btn").disabled = true;
+  $("research-btn").innerHTML = `<span class="btn-icon">⏳</span> Running…`;
   $("research-results").innerHTML = "";
-  showResearchPipeline();
+  $("research-status").textContent = "Running multi-agent crew…";
+  $("research-status").classList.remove("hidden");
 
-  if (stream) {
-    await runStreamingResearch(query, jobIds, maxCost);
-  } else {
-    await runBatchResearch(query, jobIds, maxCost);
-  }
-  $("research-btn").disabled = false; $("research-btn").innerHTML = `<span class="btn-icon">🔬</span> Run Research`;
-}
-
-// ── Streaming research ────────────────────────────────────────────────────────
-async function runStreamingResearch(query, jobIds, maxCost) {
-  let fullReport = {}, fullCrit = {}, fullPlan = {};
-  try {
-    const res = await fetch(`${API}/stream/research`, {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({ query, job_ids: jobIds, max_cost_usd: maxCost }),
-    });
-    if (!res.ok) throw new Error(await res.text());
-
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop();
-
-      for (const line of lines) {
-        if (!line.startsWith("data:")) continue;
-        try {
-          const evt = line.slice(5).trim();
-          const data = JSON.parse(evt);
-
-          if (data.agent) {
-            // agent_start or agent_done events have .agent field but so do other events
-          }
-
-          // Identify event from context
-          if (data.event_type === "cache_hit" || data._cache_hit) {
-            showCacheBadge();
-          }
-          if (data.steps !== undefined) {
-            // plan event
-            fullPlan = data;
-            setAgentDone("planner");
-            setAgentRunning("retriever");
-          }
-          if (data.n_docs !== undefined) {
-            setAgentDone("retriever");
-            setAgentRunning("synthesizer");
-          }
-          if (data.executive_summary !== undefined || data.answer_preview !== undefined) {
-            fullReport.executive_summary = data.executive_summary;
-            fullReport.answer_preview    = data.answer_preview;
-            fullReport.n_citations       = data.n_citations;
-            setAgentDone("synthesizer");
-            setAgentRunning("critic");
-          }
-          if (data.passed !== undefined) {
-            fullCrit = data;
-            setAgentDone("critic");
-          }
-          if (data.session_id && data.total_cost_usd !== undefined) {
-            // done event
-            AGENT_ORDER.forEach(k => setAgentDone(k));
-            $("pipeline-session-id").textContent = `Session: ${(data.session_id||"").slice(0,8)}…`;
-            state.researchSessions.unshift({ session_id: data.session_id, query, cost_usd: data.total_cost_usd, duration_ms: data.total_duration_ms, ts: new Date().toISOString() });
-            renderStreamingResult(query, data, fullPlan, fullReport, fullCrit);
-          }
-          if (data.agent === "planner") setAgentRunning("planner");
-          if (data.agent === "retriever") setAgentRunning("retriever");
-          if (data.agent === "table_analyst") setAgentRunning("table_analyst");
-          if (data.agent === "chart_analyst") setAgentRunning("chart_analyst");
-          if (data.agent === "synthesizer") setAgentRunning("synthesizer");
-          if (data.agent === "critic") setAgentRunning("critic");
-
-        } catch { /* skip malformed */ }
-      }
-    }
-  } catch (err) {
-    $("research-results").innerHTML = `<div class="retrieve-error">⚠️ ${escHtml(err.message)}</div>`;
-    hideResearchPipeline();
-  }
-}
-
-// ── Batch research ────────────────────────────────────────────────────────────
-async function runBatchResearch(query, jobIds, maxCost) {
   try {
     const res = await fetch(`${API}/research`, {
-      method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ query, job_ids: jobIds, config:{ max_cost_usd: maxCost }}),
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ query, job_ids: jobIds }),
     });
     if (!res.ok) throw new Error(await res.text());
     const data = await res.json();
-    AGENT_ORDER.forEach(k => setAgentDone(k));
-    $("pipeline-session-id").textContent = `Session: ${(data.session_id||"").slice(0,8)}…`;
     state.researchSessions.unshift({ ...data, query, ts: new Date().toISOString() });
+    $("research-status").classList.add("hidden");
     renderResearchResults(data);
   } catch (err) {
+    $("research-status").classList.add("hidden");
     $("research-results").innerHTML = `<div class="retrieve-error">⚠️ ${escHtml(err.message)}</div>`;
-    hideResearchPipeline();
+  } finally {
+    $("research-btn").disabled = false;
+    $("research-btn").innerHTML = `<span class="btn-icon">🔬</span> Run Research`;
   }
-}
-
-// ── Pipeline UI ───────────────────────────────────────────────────────────────
-function showResearchPipeline() {
-  $("research-pipeline").classList.remove("hidden");
-  const container = $("pipeline-agents"); container.innerHTML = "";
-  AGENT_ORDER.forEach(key => {
-    const m = AGENT_META[key]; const el = document.createElement("div");
-    el.className = "pipeline-agent pending"; el.id = `pa-${key}`;
-    el.innerHTML = `<div class="pa-icon">${m.icon}</div><div class="pa-info"><div class="pa-label">${m.label}</div><div class="pa-desc">${m.desc}</div></div><div class="pa-status-icon"></div>`;
-    container.appendChild(el);
-  });
-}
-function hideResearchPipeline() { $("research-pipeline").classList.add("hidden"); }
-function setAgentRunning(key) {
-  const el = $(`pa-${key}`); if (!el) return;
-  el.className = "pipeline-agent running";
-  el.querySelector(".pa-status-icon").textContent = "⏳";
-}
-function setAgentDone(key) {
-  const el = $(`pa-${key}`); if (!el) return;
-  el.className = "pipeline-agent done";
-  el.querySelector(".pa-status-icon").textContent = "✅";
-}
-
-function showCacheBadge() {
-  const b = $("cache-badge"); b.classList.remove("hidden");
-  setTimeout(() => b.classList.add("hidden"), 5000);
-}
-
-// ── Research result renderers ─────────────────────────────────────────────────
-function renderStreamingResult(query, doneData, plan, reportPreview, crit) {
-  const container = $("research-results"); container.innerHTML = "";
-  const meta = document.createElement("div"); meta.className = "res-meta-bar";
-  meta.innerHTML = `
-    <span>⏱ ${((doneData.total_duration_ms||0)/1000).toFixed(1)}s</span>
-    <span>💰 $${(doneData.total_cost_usd||0).toFixed(4)}</span>
-    <button class="res-session-chip" title="${doneData.session_id||""}">🔑 ${(doneData.session_id||"").slice(0,8)}…</button>
-    ${doneData.cache_hit?`<span class="res-session-chip" style="color:var(--green)">⚡ Cached</span>`:""}
-    ${doneData.error?`<span class="res-error-chip">⚠️ ${escHtml(doneData.error)}</span>`:""}`;
-  meta.querySelector(".res-session-chip").addEventListener("click", e => {
-    const sid = doneData.session_id||"";
-    navigator.clipboard.writeText(sid).then(() => { e.currentTarget.textContent = "✅ Copied"; setTimeout(()=>{e.currentTarget.textContent=`🔑 ${sid.slice(0,8)}…`;},1500); });
-  });
-  container.appendChild(meta);
-
-  // Plan
-  if (plan.steps?.length) {
-    const c = mkCard("📋 Research Plan");
-    const ol = document.createElement("ol"); ol.className = "plan-steps";
-    plan.steps.forEach(s => { const li = document.createElement("li"); li.textContent = s; ol.appendChild(li); });
-    c.querySelector(".res-card-body").appendChild(ol);
-    container.appendChild(c);
-  }
-
-  // Answer preview (streaming gave us a preview)
-  if (reportPreview.executive_summary || reportPreview.answer_preview) {
-    const c = mkCard("📝 Answer");
-    const body = c.querySelector(".res-card-body");
-    if (reportPreview.executive_summary) {
-      const p = document.createElement("p"); p.className = "res-exec-summary";
-      p.textContent = reportPreview.executive_summary; body.appendChild(p);
-    }
-    if (reportPreview.answer_preview) {
-      const p = document.createElement("p"); p.className = "res-answer-para";
-      p.innerHTML = escHtml(reportPreview.answer_preview).replace(/\[(\d+)\]/g,'<span class="citation-ref">[$1]</span>');
-      body.appendChild(p);
-    }
-    if (reportPreview.n_citations > 0) {
-      const note = document.createElement("p"); note.className = "res-empty-note";
-      note.textContent = `📎 ${reportPreview.n_citations} citations — view in Citations tab`; body.appendChild(note);
-    }
-    container.appendChild(c);
-  }
-
-  // Critique
-  if (crit.score !== undefined) {
-    container.appendChild(buildCritiqueCard(crit));
-  }
-
-  // Offer to view full session
-  const link = document.createElement("div"); link.style.cssText = "margin-top:16px;text-align:center";
-  link.innerHTML = `<button class="btn-link" onclick="document.querySelector('.tab[data-tab=sessions]').click()">📋 View full report in Sessions →</button>`;
-  container.appendChild(link);
 }
 
 function renderResearchResults(data) {
@@ -486,10 +301,6 @@ function renderResearchResults(data) {
   const report = data.report || {};
   const crit   = data.critique || {};
   const cits   = report.citations || [];
-
-  // Store citations for the citation viewer tab
-  state.lastCitations = cits;
-  state.lastReport    = report;
 
   const meta = document.createElement("div"); meta.className = "res-meta-bar";
   meta.innerHTML = `
@@ -556,11 +367,6 @@ function renderResearchResults(data) {
     });
     c.querySelector(".res-card-body").appendChild(list);
     container.appendChild(c);
-    // Add citation viewer shortcut
-    const btn = document.createElement("button"); btn.className = "btn-link"; btn.style.cssText = "margin-top:10px;display:block";
-    btn.textContent = "📎 View in Citation Viewer →";
-    btn.addEventListener("click", () => document.querySelector('.tab[data-tab="citations"]').click());
-    c.querySelector(".res-card-body").appendChild(btn);
   }
   if (crit.score !== undefined) container.appendChild(buildCritiqueCard(crit));
 }
@@ -587,40 +393,6 @@ function mkCard(title) {
   const c = document.createElement("div"); c.className = "res-card";
   c.innerHTML = `<div class="res-card-header">${escHtml(title)}</div><div class="res-card-body"></div>`;
   return c;
-}
-
-// ── Citation Viewer ───────────────────────────────────────────────────────────
-function renderCitationViewer() {
-  const container = $("citation-viewer-content");
-  if (!state.lastCitations?.length) {
-    container.innerHTML = `<p class="empty-state">Run a research query first — citations will appear here.</p>`;
-    return;
-  }
-  container.innerHTML = "";
-  state.lastCitations.forEach((cit, i) => {
-    const mod   = cit.modality || "text";
-    const color = MOD_COLOR[mod] || "#6366f1";
-    const card  = document.createElement("div"); card.className = "citation-full-card";
-    card.innerHTML = `
-      <div class="citation-full-header">
-        <span class="citation-num-large">[${i+1}]</span>
-        <div>
-          <div class="citation-full-title">${escHtml(cit.filename||cit.source||"Unknown")}</div>
-          <div class="citation-full-meta">
-            <span class="modality-badge" style="background:${color}20;color:${color};border-color:${color}40;font-size:11px">
-              ${MOD_ICON[mod]||"📄"} ${mod.toUpperCase()}
-            </span>
-            <span>Page ${cit.page||"?"}</span>
-            <span>Relevance: ${((cit.relevance_score||0)*100).toFixed(0)}%</span>
-          </div>
-        </div>
-        <div class="citation-rel-bar-wrap">
-          <div class="citation-rel-bar" style="width:${((cit.relevance_score||0)*100).toFixed(0)}%;background:${color}"></div>
-        </div>
-      </div>
-      <div class="citation-full-content">${escHtml(cit.content_preview||"(no preview)")}</div>`;
-    container.appendChild(card);
-  });
 }
 
 // ── Eval Dashboard ────────────────────────────────────────────────────────────

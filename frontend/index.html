@@ -23,7 +23,6 @@
       <button class="tab"        data-tab="chat"     >🤖 Chat</button>
       <button class="tab"        data-tab="retrieve" >🔍 Retrieve</button>
       <button class="tab"        data-tab="research" >🔬 Research</button>
-      <button class="tab"        data-tab="citations">📎 Citations</button>
       <button class="tab"        data-tab="eval"     >📊 Eval</button>
       <button class="tab"        data-tab="sessions" >📋 Sessions</button>
       <button class="tab"        data-tab="jobs"     >⚙️ Jobs</button>
@@ -122,11 +121,11 @@
     <div class="retrieve-results" id="retrieve-results"></div>
   </section>
 
-  <!-- ─ Research (Streaming) ─ -->
+  <!-- ─ Research ─ -->
   <section class="panel hidden" id="panel-research">
     <div class="panel-header">
       <h1 class="panel-title">Multi-Agent Research</h1>
-      <p class="panel-sub">6-specialist crew streams results live — Planner → Retriever → Analyst → Synthesizer → Critic.</p>
+      <p class="panel-sub">Planner → Retriever → Synthesizer → Critic. Citations shown inline.</p>
     </div>
     <div class="card research-input-card">
       <textarea class="research-textarea" id="research-query" rows="3"
@@ -135,45 +134,14 @@
         <label class="form-label">Job IDs <span class="muted-hint">— leave blank for all documents</span></label>
         <input class="chat-input" id="research-job-ids" type="text" placeholder="e.g. f381b731-…" />
       </div>
-      <div class="research-controls-row">
-        <div class="research-inline-field">
-          <label class="form-label">Max cost (USD)</label>
-          <input class="chat-input research-cost-input" id="research-max-cost" type="number" value="0.50" min="0.01" max="5.00" step="0.10" />
-        </div>
-        <div class="research-inline-field research-hitl-field">
-          <label class="form-label">Stream live</label>
-          <label class="toggle-switch">
-            <input type="checkbox" id="research-stream" checked />
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-        <button class="btn btn-primary" id="research-btn" style="margin-left:auto">
+      <div style="display:flex;justify-content:flex-end;margin-top:12px">
+        <button class="btn btn-primary" id="research-btn">
           <span class="btn-icon">🔬</span> Run Research
         </button>
       </div>
     </div>
-
-    <!-- Live Pipeline -->
-    <div class="card research-pipeline hidden" id="research-pipeline">
-      <div class="pipeline-header">
-        <span class="pipeline-title">Live Agent Pipeline</span>
-        <span class="pipeline-session" id="pipeline-session-id"></span>
-      </div>
-      <div class="pipeline-agents" id="pipeline-agents"></div>
-    </div>
-
+    <div id="research-status" class="hidden" style="padding:12px 0;color:var(--muted);font-size:13px;text-align:center"></div>
     <div id="research-results" class="research-results"></div>
-  </section>
-
-  <!-- ─ Citation Viewer ─ -->
-  <section class="panel hidden" id="panel-citations">
-    <div class="panel-header">
-      <h1 class="panel-title">Citation Viewer</h1>
-      <p class="panel-sub">Browse all citations from your last research session. Click any citation to see its source context.</p>
-    </div>
-    <div id="citation-viewer-content">
-      <p class="empty-state">Run a research query first, then citations will appear here.</p>
-    </div>
   </section>
 
   <!-- ─ Eval Dashboard ─ -->
